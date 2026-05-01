@@ -1,20 +1,20 @@
 /* eslint-disable no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
-import { db } from '@/lib/db';
-import { PlayRecord } from '@/lib/types';
+import { getAuthInfoFromCookie } from "@/lib/auth";
+import { getConfig } from "@/lib/config";
+import { db, getSearchParam, parseStorageKey } from "@/lib/db";
+import { PlayRecord } from "@/lib/types";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -24,19 +24,19 @@ export async function GET(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
     const records = await db.getAllPlayRecords(authInfo.username);
     return NextResponse.json(records, { status: 200 });
   } catch (err) {
-    console.error('获取播放记录失败', err);
+    console.error("获取播放记录失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -57,19 +57,19 @@ export async function POST(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
-    const body = await request.json();
-    const { key, record }: { key: string; record: PlayRecord } = body;
+    const body = (await request.json()) as { key: string; record: PlayRecord };
+    const { key, record } = body;
 
     if (!key || !record) {
       return NextResponse.json(
-        { error: 'Missing key or record' },
+        { error: "Missing key or record" },
         { status: 400 }
       );
     }
@@ -77,16 +77,15 @@ export async function POST(request: NextRequest) {
     // 验证播放记录数据
     if (!record.title || !record.source_name || record.index < 1) {
       return NextResponse.json(
-        { error: 'Invalid record data' },
+        { error: "Invalid record data" },
         { status: 400 }
       );
     }
 
-    // 从key中解析source和id
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json(
-        { error: 'Invalid key format' },
+        { error: "Invalid key format" },
         { status: 400 }
       );
     }
@@ -96,13 +95,18 @@ export async function POST(request: NextRequest) {
       save_time: record.save_time ?? Date.now(),
     } as PlayRecord;
 
-    await db.savePlayRecord(authInfo.username, source, id, finalRecord);
+    await db.savePlayRecord(
+      authInfo.username,
+      parsed.source,
+      parsed.id,
+      finalRecord
+    );
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
-    console.error('保存播放记录失败', err);
+    console.error("保存播放记录失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
@@ -113,7 +117,7 @@ export async function DELETE(request: NextRequest) {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -123,28 +127,27 @@ export async function DELETE(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
     const username = authInfo.username;
-    const { searchParams } = new URL(request.url);
-    const key = searchParams.get('key');
+    const rawUrl = request.url;
+    const key = getSearchParam(rawUrl, "key");
 
     if (key) {
-      // 如果提供了 key，删除单条播放记录
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
-          { error: 'Invalid key format' },
+          { error: "Invalid key format" },
           { status: 400 }
         );
       }
 
-      await db.deletePlayRecord(username, source, id);
+      await db.deletePlayRecord(username, parsed.source, parsed.id);
     } else {
       // 未提供 key，则清空全部播放记录
       await db.deleteAllPlayRecords(username);
@@ -152,9 +155,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
-    console.error('删除播放记录失败', err);
+    console.error("删除播放记录失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }

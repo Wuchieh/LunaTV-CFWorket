@@ -3,7 +3,12 @@
 # dependencies
 /node_modules
 /.pnp
-.pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
 # testing
 /coverage
@@ -41,5 +46,17 @@ sitemap.xml
 sitemap-*.xml
 
 # generated files
-src/lib/runtime.ts
 public/manifest.json
+
+# OpenNext
+/.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+
+!.dev.vars.example
+
+# scripts
+scripts/
+.idea

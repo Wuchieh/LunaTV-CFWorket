@@ -1,0 +1,37 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lunatv-new",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-04-27",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "lunatv-new"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "LUNATV_KV",
+      "id": "b88c1a95823a4eeb9c30deb73e5ce062"
+    }
+  ],
+  "vars": {
+    "STORAGE_TYPE": "kv"
+  },
+  "upload_source_maps": true
+}

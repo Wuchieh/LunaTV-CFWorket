@@ -1,35 +1,35 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any */
+/* eslint-disable no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getConfig, refineConfig } from '@/lib/config';
-import { db } from '@/lib/db';
-import { fetchVideoDetail } from '@/lib/fetchVideoDetail';
-import { refreshLiveChannels } from '@/lib/live';
-import { SearchResult } from '@/lib/types';
+import { getConfig, refineConfig } from "@/lib/config";
+import { db, parseStorageKey } from "@/lib/db";
+import { fetchVideoDetail } from "@/lib/fetchVideoDetail";
+import { refreshLiveChannels } from "@/lib/live";
+import { SearchResult } from "@/lib/types";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   console.log(request.url);
   try {
-    console.log('Cron job triggered:', new Date().toISOString());
+    console.log("Cron job triggered:", new Date().toISOString());
 
     cronJob();
 
     return NextResponse.json({
       success: true,
-      message: 'Cron job executed successfully',
+      message: "Cron job executed successfully",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Cron job failed:', error);
+    console.error("Cron job failed:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: 'Cron job failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Cron job failed",
+        error: error instanceof Error ? error.message : "Unknown error",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }
@@ -48,13 +48,16 @@ async function refreshAllLiveChannels() {
 
   // 并发刷新所有启用的直播源
   const refreshPromises = (config.LiveConfig || [])
-    .filter(liveInfo => !liveInfo.disabled)
+    .filter((liveInfo) => !liveInfo.disabled)
     .map(async (liveInfo) => {
       try {
         const nums = await refreshLiveChannels(liveInfo);
         liveInfo.channelNumber = nums;
       } catch (error) {
-        console.error(`刷新直播源失败 [${liveInfo.name || liveInfo.key}]:`, error);
+        console.error(
+          `刷新直播源失败 [${liveInfo.name || liveInfo.key}]:`,
+          error
+        );
         liveInfo.channelNumber = 0;
       }
     });
@@ -68,7 +71,12 @@ async function refreshAllLiveChannels() {
 
 async function refreshConfig() {
   let config = await getConfig();
-  if (config && config.ConfigSubscribtion && config.ConfigSubscribtion.URL && config.ConfigSubscribtion.AutoUpdate) {
+  if (
+    config &&
+    config.ConfigSubscribtion &&
+    config.ConfigSubscribtion.URL &&
+    config.ConfigSubscribtion.AutoUpdate
+  ) {
     try {
       const response = await fetch(config.ConfigSubscribtion.URL);
 
@@ -81,28 +89,28 @@ async function refreshConfig() {
       // 对 configContent 进行 base58 解码
       let decodedContent;
       try {
-        const bs58 = (await import('bs58')).default;
+        const bs58 = (await import("bs58")).default;
         const decodedBytes = bs58.decode(configContent);
         decodedContent = new TextDecoder().decode(decodedBytes);
       } catch (decodeError) {
-        console.warn('Base58 解码失败:', decodeError);
+        console.warn("Base58 解码失败:", decodeError);
         throw decodeError;
       }
 
       try {
         JSON.parse(decodedContent);
       } catch (e) {
-        throw new Error('配置文件格式错误，请检查 JSON 语法');
+        throw new Error("配置文件格式错误，请检查 JSON 语法");
       }
       config.ConfigFile = decodedContent;
       config.ConfigSubscribtion.LastCheck = new Date().toISOString();
       config = refineConfig(config);
       await db.saveAdminConfig(config);
     } catch (e) {
-      console.error('刷新配置失败:', e);
+      console.error("刷新配置失败:", e);
     }
   } else {
-    console.log('跳过刷新：未配置订阅地址或自动更新');
+    console.log("跳过刷新：未配置订阅地址或自动更新");
   }
 }
 
@@ -156,7 +164,11 @@ async function refreshRecordAndFavorites() {
           results[i] = await tasks[i]();
         }
       };
-      await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, tasks.length) }, () =>
+          worker()
+        )
+      );
       return results;
     };
 
@@ -173,13 +185,17 @@ async function refreshRecordAndFavorites() {
 
         const tasks = entries.map(([key, record]) => async () => {
           try {
-            const [source, id] = key.split('+');
-            if (!source || !id) {
+            const parsed = parseStorageKey(key);
+            if (!parsed) {
               console.warn(`跳过无效的播放记录键: ${key}`);
               return;
             }
 
-            const detail = await getDetail(source, id, record.title);
+            const detail = await getDetail(
+              parsed.source,
+              parsed.id,
+              record.title
+            );
             if (!detail) {
               console.warn(`跳过无法获取详情的播放记录: ${key}`);
               return;
@@ -187,7 +203,7 @@ async function refreshRecordAndFavorites() {
 
             const episodeCount = detail.episodes?.length || 0;
             if (episodeCount > 0 && episodeCount !== record.total_episodes) {
-              await db.savePlayRecord(user, source, id, {
+              await db.savePlayRecord(user, parsed.source, parsed.id, {
                 title: detail.title || record.title,
                 source_name: record.source_name,
                 cover: detail.poster || record.cover,
@@ -220,7 +236,7 @@ async function refreshRecordAndFavorites() {
       try {
         let favorites = await db.getAllFavorites(user);
         favorites = Object.fromEntries(
-          Object.entries(favorites).filter(([_, fav]) => fav.origin !== 'live')
+          Object.entries(favorites).filter(([_, fav]) => fav.origin !== "live")
         );
         const favEntries = Object.entries(favorites);
         const totalFavorites = favEntries.length;
@@ -228,13 +244,17 @@ async function refreshRecordAndFavorites() {
 
         const tasks = favEntries.map(([key, fav]) => async () => {
           try {
-            const [source, id] = key.split('+');
-            if (!source || !id) {
+            const parsed = parseStorageKey(key);
+            if (!parsed) {
               console.warn(`跳过无效的收藏键: ${key}`);
               return;
             }
 
-            const favDetail = await getDetail(source, id, fav.title);
+            const favDetail = await getDetail(
+              parsed.source,
+              parsed.id,
+              fav.title
+            );
             if (!favDetail) {
               console.warn(`跳过无法获取详情的收藏: ${key}`);
               return;
@@ -242,7 +262,7 @@ async function refreshRecordAndFavorites() {
 
             const favEpisodeCount = favDetail.episodes?.length || 0;
             if (favEpisodeCount > 0 && favEpisodeCount !== fav.total_episodes) {
-              await db.saveFavorite(user, source, id, {
+              await db.saveFavorite(user, parsed.source, parsed.id, {
                 title: favDetail.title || fav.title,
                 source_name: fav.source_name,
                 cover: favDetail.poster || fav.cover,
@@ -273,8 +293,8 @@ async function refreshRecordAndFavorites() {
     const userTasks = users.map((user) => () => processUser(user));
     await runWithConcurrency(userTasks, 3);
 
-    console.log('刷新播放记录/收藏任务完成');
+    console.log("刷新播放记录/收藏任务完成");
   } catch (err) {
-    console.error('刷新播放记录/收藏任务启动失败', err);
+    console.error("刷新播放记录/收藏任务启动失败", err);
   }
 }

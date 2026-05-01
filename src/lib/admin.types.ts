@@ -21,10 +21,10 @@ export interface AdminConfig {
   UserConfig: {
     Users: {
       username: string;
-      role: 'user' | 'admin' | 'owner';
+      role: "user" | "admin" | "owner";
       banned?: boolean;
-      enabledApis?: string[]; // 优先级高于tags限制
-      tags?: string[]; // 多 tags 取并集限制
+      enabledApis?: string[];
+      tags?: string[];
     }[];
     Tags?: {
       name: string;
@@ -36,29 +36,29 @@ export interface AdminConfig {
     name: string;
     api: string;
     detail?: string;
-    from: 'config' | 'custom';
+    from: "config" | "custom";
     disabled?: boolean;
   }[];
   CustomCategories: {
     name?: string;
-    type: 'movie' | 'tv';
+    type: "movie" | "tv";
     query: string;
-    from: 'config' | 'custom';
+    from: "config" | "custom";
     disabled?: boolean;
   }[];
   LiveConfig?: {
     key: string;
     name: string;
-    url: string;  // m3u 地址
+    url: string;
     ua?: string;
-    epg?: string; // 节目单
-    from: 'config' | 'custom';
+    epg?: string;
+    from: "config" | "custom";
     channelNumber?: number;
     disabled?: boolean;
   }[];
 }
 
 export interface AdminConfigResult {
-  Role: 'owner' | 'admin';
+  Role: "owner" | "admin";
   Config: AdminConfig;
 }

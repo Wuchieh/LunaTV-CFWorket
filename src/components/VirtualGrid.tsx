@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useVirtualizer } from '@tanstack/react-virtual';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from "@tanstack/react-virtual";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 interface VirtualGridProps<T> {
   items: T[];
@@ -26,9 +26,9 @@ export default function VirtualGrid<T>({
   items,
   renderItem,
   estimateRowHeight = 320,
-  rowGapClass = 'pb-14 sm:pb-20',
+  rowGapClass = "pb-14 sm:pb-20",
   overscan = 3,
-  className = '',
+  className = "",
 }: VirtualGridProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(3);
@@ -39,7 +39,7 @@ export default function VirtualGrid<T>({
   const detectColumns = useCallback(() => {
     if (!probeRef.current) return;
     const style = window.getComputedStyle(probeRef.current);
-    const cols = style.gridTemplateColumns.split(' ').length;
+    const cols = style.gridTemplateColumns.split(" ").length;
     if (cols > 0 && cols !== columns) setColumns(cols);
   }, [columns]);
 
@@ -76,8 +76,8 @@ export default function VirtualGrid<T>({
         ref={parentRef}
         style={{
           height: virtualizer.getTotalSize(),
-          width: '100%',
-          position: 'relative',
+          width: "100%",
+          position: "relative",
         }}
       >
         {virtualRows.map((virtualRow) => {
@@ -91,10 +91,10 @@ export default function VirtualGrid<T>({
               ref={virtualizer.measureElement}
               className={`${rowGapClass}`}
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
                 left: 0,
-                width: '100%',
+                width: "100%",
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >

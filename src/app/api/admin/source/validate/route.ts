@@ -1,32 +1,29 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
+/* eslint-disable no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
-import { API_CONFIG } from '@/lib/config';
+import { getAuthInfoFromCookie } from "@/lib/auth";
+import { getConfig } from "@/lib/config";
+import { API_CONFIG } from "@/lib/config";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
   if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
-  const searchKeyword = searchParams.get('q');
+  const searchKeyword = searchParams.get("q");
 
   if (!searchKeyword) {
-    return new Response(
-      JSON.stringify({ error: '搜索关键词不能为空' }),
-      {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    return new Response(JSON.stringify({ error: "搜索关键词不能为空" }), {
+      status: 400,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   }
 
   const config = await getConfig();
@@ -43,13 +40,16 @@ export async function GET(request: NextRequest) {
       // 辅助函数：安全地向控制器写入数据
       const safeEnqueue = (data: Uint8Array) => {
         try {
-          if (streamClosed || (!controller.desiredSize && controller.desiredSize !== 0)) {
+          if (
+            streamClosed ||
+            (!controller.desiredSize && controller.desiredSize !== 0)
+          ) {
             return false;
           }
           controller.enqueue(data);
           return true;
         } catch (error) {
-          console.warn('Failed to enqueue data:', error);
+          console.warn("Failed to enqueue data:", error);
           streamClosed = true;
           return false;
         }
@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
 
       // 发送开始事件
       const startEvent = `data: ${JSON.stringify({
-        type: 'start',
-        totalSources: apiSites.length
+        type: "start",
+        totalSources: apiSites.length,
       })}\n\n`;
 
       if (!safeEnqueue(encoder.encode(startEvent))) {
@@ -72,7 +72,9 @@ export async function GET(request: NextRequest) {
       const validationPromises = apiSites.map(async (site) => {
         try {
           // 构建搜索URL，只获取第一页
-          const searchUrl = `${site.api}?ac=videolist&wd=${encodeURIComponent(searchKeyword)}`;
+          const searchUrl = `${site.api}?ac=videolist&wd=${encodeURIComponent(
+            searchKeyword
+          )}`;
 
           // 设置超时控制
           const controller = new AbortController();
@@ -90,10 +92,10 @@ export async function GET(request: NextRequest) {
               throw new Error(`HTTP ${response.status}`);
             }
 
-            const data = await response.json() as any;
+            const data = (await response.json()) as any;
 
             // 检查结果是否有效
-            let status: 'valid' | 'no_results' | 'invalid';
+            let status: "valid" | "no_results" | "invalid";
             if (
               data &&
               data.list &&
@@ -102,17 +104,19 @@ export async function GET(request: NextRequest) {
             ) {
               // 检查是否有标题包含搜索词的结果
               const validResults = data.list.filter((item: any) => {
-                const title = item.vod_name || '';
-                return title.toLowerCase().includes(searchKeyword.toLowerCase());
+                const title = item.vod_name || "";
+                return title
+                  .toLowerCase()
+                  .includes(searchKeyword.toLowerCase());
               });
 
               if (validResults.length > 0) {
-                status = 'valid';
+                status = "valid";
               } else {
-                status = 'no_results';
+                status = "no_results";
               }
             } else {
-              status = 'no_results';
+              status = "no_results";
             }
 
             // 发送该源的验证结果
@@ -120,9 +124,9 @@ export async function GET(request: NextRequest) {
 
             if (!streamClosed) {
               const sourceEvent = `data: ${JSON.stringify({
-                type: 'source_result',
+                type: "source_result",
                 source: site.key,
-                status
+                status,
               })}\n\n`;
 
               if (!safeEnqueue(encoder.encode(sourceEvent))) {
@@ -130,11 +134,9 @@ export async function GET(request: NextRequest) {
                 return;
               }
             }
-
           } finally {
             clearTimeout(timeoutId);
           }
-
         } catch (error) {
           console.warn(`验证失败 ${site.name}:`, error);
 
@@ -143,9 +145,9 @@ export async function GET(request: NextRequest) {
 
           if (!streamClosed) {
             const errorEvent = `data: ${JSON.stringify({
-              type: 'source_error',
+              type: "source_error",
               source: site.key,
-              status: 'invalid'
+              status: "invalid",
             })}\n\n`;
 
             if (!safeEnqueue(encoder.encode(errorEvent))) {
@@ -160,15 +162,15 @@ export async function GET(request: NextRequest) {
           if (!streamClosed) {
             // 发送最终完成事件
             const completeEvent = `data: ${JSON.stringify({
-              type: 'complete',
-              completedSources
+              type: "complete",
+              completedSources,
             })}\n\n`;
 
             if (safeEnqueue(encoder.encode(completeEvent))) {
               try {
                 controller.close();
               } catch (error) {
-                console.warn('Failed to close controller:', error);
+                console.warn("Failed to close controller:", error);
               }
             }
           }
@@ -181,19 +183,19 @@ export async function GET(request: NextRequest) {
 
     cancel() {
       streamClosed = true;
-      console.log('Client disconnected, cancelling validation stream');
+      console.log("Client disconnected, cancelling validation stream");
     },
   });
 
   // 返回流式响应
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   });
 }

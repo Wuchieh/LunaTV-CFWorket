@@ -1,33 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getAvailableApiSites, getCacheTime, getConfig } from '@/lib/config';
-import { searchFromApi } from '@/lib/downstream';
-import { yellowWords } from '@/lib/yellow';
+import { getAuthInfoFromCookie } from "@/lib/auth";
+import { getAvailableApiSites, getCacheTime, getConfig } from "@/lib/config";
+import { searchFromApi } from "@/lib/downstream";
+import { yellowWords } from "@/lib/yellow";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 // OrionTV 兼容接口
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
   if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get('q');
-  const resourceId = searchParams.get('resourceId');
+  const query = searchParams.get("q");
+  const resourceId = searchParams.get("resourceId");
 
   if (!query || !resourceId) {
     const cacheTime = await getCacheTime();
     return NextResponse.json(
-      { result: null, error: '缺少必要参数: q 或 resourceId' },
+      { result: null, error: "缺少必要参数: q 或 resourceId" },
       {
         headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Netlify-Vary': 'query',
+          "Cache-Control": `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+          "CDN-Cache-Control": `public, s-maxage=${cacheTime}`,
+          "Vercel-CDN-Cache-Control": `public, s-maxage=${cacheTime}`,
+          "Netlify-Vary": "query",
         },
       }
     );
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     let result = results.filter((r) => r.title === query);
     if (!config.SiteConfig.DisableYellowFilter) {
       result = result.filter((result) => {
-        const typeName = result.type_name || '';
+        const typeName = result.type_name || "";
         return !yellowWords.some((word: string) => typeName.includes(word));
       });
     }
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     if (result.length === 0) {
       return NextResponse.json(
         {
-          error: '未找到结果',
+          error: "未找到结果",
           result: null,
         },
         { status: 404 }
@@ -72,10 +72,10 @@ export async function GET(request: NextRequest) {
         { results: result },
         {
           headers: {
-            'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-            'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-            'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-            'Netlify-Vary': 'query',
+            "Cache-Control": `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
+            "CDN-Cache-Control": `public, s-maxage=${cacheTime}`,
+            "Vercel-CDN-Cache-Control": `public, s-maxage=${cacheTime}`,
+            "Netlify-Vary": "query",
           },
         }
       );
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: '搜索失败',
+        error: "搜索失败",
         result: null,
       },
       { status: 500 }

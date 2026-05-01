@@ -1,56 +1,99 @@
-import CryptoJS from 'crypto-js';
+async function getKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const passwordBuffer = encoder.encode(password);
 
-/**
- * 简单的对称加密工具
- * 使用 AES 加密算法
- */
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    passwordBuffer,
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: salt.buffer as ArrayBuffer,
+      iterations: 100000,
+      hash: "SHA-512",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
 export class SimpleCrypto {
-  /**
-   * 加密数据
-   * @param data 要加密的数据
-   * @param password 加密密码
-   * @returns 加密后的字符串
-   */
-  static encrypt(data: string, password: string): string {
+  static async encrypt(data: string, password: string): Promise<string> {
     try {
-      const encrypted = CryptoJS.AES.encrypt(data, password).toString();
-      return encrypted;
-    } catch (error) {
-      throw new Error('加密失败');
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await getKey(password, salt);
+
+      const encoder = new TextEncoder();
+      const dataBuffer = encoder.encode(data);
+
+      const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        dataBuffer
+      );
+
+      const combined = new Uint8Array(
+        salt.length + iv.length + encrypted.byteLength
+      );
+      combined.set(salt, 0);
+      combined.set(iv, salt.length);
+      combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+      return btoa(String.fromCharCode(...combined));
+    } catch {
+      throw new Error("加密失败");
     }
   }
 
-  /**
-   * 解密数据
-   * @param encryptedData 加密的数据
-   * @param password 解密密码
-   * @returns 解密后的字符串
-   */
-  static decrypt(encryptedData: string, password: string): string {
+  static async decrypt(
+    encryptedData: string,
+    password: string
+  ): Promise<string> {
     try {
-      const bytes = CryptoJS.AES.decrypt(encryptedData, password);
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+      const combined = Uint8Array.from(atob(encryptedData), (c) =>
+        c.charCodeAt(0)
+      );
 
-      if (!decrypted) {
-        throw new Error('解密失败，请检查密码是否正确');
+      const salt = combined.slice(0, 16);
+      const iv = combined.slice(16, 28);
+      const data = combined.slice(28);
+
+      const key = await getKey(password, salt);
+
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        data
+      );
+
+      const decoder = new TextDecoder();
+      const decoded = decoder.decode(decrypted);
+
+      if (!decoded) {
+        throw new Error("解密失败，请检查密码是否正确");
       }
 
-      return decrypted;
-    } catch (error) {
-      throw new Error('解密失败，请检查密码是否正确');
+      return decoded;
+    } catch {
+      throw new Error("解密失败，请检查密码是否正确");
     }
   }
 
-  /**
-   * 验证密码是否能正确解密数据
-   * @param encryptedData 加密的数据
-   * @param password 密码
-   * @returns 是否能正确解密
-   */
-  static canDecrypt(encryptedData: string, password: string): boolean {
+  static async canDecrypt(
+    encryptedData: string,
+    password: string
+  ): Promise<boolean> {
     try {
-      const decrypted = this.decrypt(encryptedData, password);
-      return decrypted.length > 0;
+      await this.decrypt(encryptedData, password);
+      return true;
     } catch {
       return false;
     }

@@ -1,13 +1,13 @@
 /* eslint-disable no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
-import { db } from '@/lib/db';
-import { Favorite } from '@/lib/types';
+import { getAuthInfoFromCookie } from "@/lib/auth";
+import { getConfig } from "@/lib/config";
+import { db, getSearchParam, parseStorageKey } from "@/lib/db";
+import { Favorite } from "@/lib/types";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 /**
  * GET /api/favorites
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -31,26 +31,29 @@ export async function GET(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
-    const { searchParams } = new URL(request.url);
-    const key = searchParams.get('key');
+    const rawUrl = request.url;
+    const key = getSearchParam(rawUrl, "key");
 
-    // 查询单条收藏
     if (key) {
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
-          { error: 'Invalid key format' },
+          { error: "Invalid key format" },
           { status: 400 }
         );
       }
-      const fav = await db.getFavorite(authInfo.username, source, id);
+      const fav = await db.getFavorite(
+        authInfo.username,
+        parsed.source,
+        parsed.id
+      );
       return NextResponse.json(fav, { status: 200 });
     }
 
@@ -58,9 +61,9 @@ export async function GET(request: NextRequest) {
     const favorites = await db.getAllFavorites(authInfo.username);
     return NextResponse.json(favorites, { status: 200 });
   } catch (err) {
-    console.error('获取收藏失败', err);
+    console.error("获取收藏失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -85,19 +88,19 @@ export async function POST(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
-    const body = await request.json();
-    const { key, favorite }: { key: string; favorite: Favorite } = body;
+    const body = (await request.json()) as { key: string; favorite: Favorite };
+    const { key, favorite } = body;
 
     if (!key || !favorite) {
       return NextResponse.json(
-        { error: 'Missing key or favorite' },
+        { error: "Missing key or favorite" },
         { status: 400 }
       );
     }
@@ -105,15 +108,15 @@ export async function POST(request: NextRequest) {
     // 验证必要字段
     if (!favorite.title || !favorite.source_name) {
       return NextResponse.json(
-        { error: 'Invalid favorite data' },
+        { error: "Invalid favorite data" },
         { status: 400 }
       );
     }
 
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json(
-        { error: 'Invalid key format' },
+        { error: "Invalid key format" },
         { status: 400 }
       );
     }
@@ -123,13 +126,18 @@ export async function POST(request: NextRequest) {
       save_time: favorite.save_time ?? Date.now(),
     } as Favorite;
 
-    await db.saveFavorite(authInfo.username, source, id, finalFavorite);
+    await db.saveFavorite(
+      authInfo.username,
+      parsed.source,
+      parsed.id,
+      finalFavorite
+    );
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
-    console.error('保存收藏失败', err);
+    console.error("保存收藏失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
@@ -146,7 +154,7 @@ export async function DELETE(request: NextRequest) {
     // 从 cookie 获取用户信息
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const config = await getConfig();
@@ -156,27 +164,26 @@ export async function DELETE(request: NextRequest) {
         (u) => u.username === authInfo.username
       );
       if (!user) {
-        return NextResponse.json({ error: '用户不存在' }, { status: 401 });
+        return NextResponse.json({ error: "用户不存在" }, { status: 401 });
       }
       if (user.banned) {
-        return NextResponse.json({ error: '用户已被封禁' }, { status: 401 });
+        return NextResponse.json({ error: "用户已被封禁" }, { status: 401 });
       }
     }
 
     const username = authInfo.username;
-    const { searchParams } = new URL(request.url);
-    const key = searchParams.get('key');
+    const rawUrl = request.url;
+    const key = getSearchParam(rawUrl, "key");
 
     if (key) {
-      // 删除单条
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
-          { error: 'Invalid key format' },
+          { error: "Invalid key format" },
           { status: 400 }
         );
       }
-      await db.deleteFavorite(username, source, id);
+      await db.deleteFavorite(username, parsed.source, parsed.id);
     } else {
       // 清空全部
       await db.deleteAllFavorites(username);
@@ -184,9 +191,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
-    console.error('删除收藏失败', err);
+    console.error("删除收藏失败", err);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
